@@ -11,7 +11,8 @@ services:
       MCP_REGISTRY_SEED_FROM: ${MCP_REGISTRY_SEED_FROM:-https://registry.modelcontextprotocol.io/v0/servers?search=domdomegg}
       MCP_REGISTRY_ENABLE_ANONYMOUS_AUTH: ${MCP_REGISTRY_ENABLE_ANONYMOUS_AUTH:-true}
       MCP_REGISTRY_ENABLE_REGISTRY_VALIDATION: ${MCP_REGISTRY_ENABLE_REGISTRY_VALIDATION:-true}
-      MCP_REGISTRY_JWT_PRIVATE_KEY_SEED: ${MCP_REGISTRY_JWT_PRIVATE_KEY_SEED:-0123456789abcdef0123456789abcdef}
+      # 32-byte (64 hex char) Ed25519 seed. Generate a new one with: openssl rand -hex 32
+      MCP_REGISTRY_JWT_PRIVATE_KEY: ${MCP_REGISTRY_JWT_PRIVATE_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
     ports:
       - "8080:8080"
     restart: unless-stopped
