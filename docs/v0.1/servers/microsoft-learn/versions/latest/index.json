@@ -1,0 +1,29 @@
+{
+  "server": {
+    "id": "microsoft-learn",
+    "title": "Microsoft Learn MCP Server",
+    "name": "io.github.microsoft/microsoft-learn",
+    "description": "Official Microsoft Learn MCP server for docs search and page fetch.",
+    "version": "1.0.0",
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "remotes": [
+      {
+        "type": "streamable-http",
+        "url": "https://learn.microsoft.com/api/mcp"
+      }
+    ],
+    "repository": {
+      "url": "https://github.com/microsoft/mcp",
+      "source": "github"
+    }
+  },
+  "_meta": {
+    "io.modelcontextprotocol.registry/official": {
+      "status": "active",
+      "statusChangedAt": "2026-06-05T13:57:42.490+03:00",
+      "publishedAt": "2026-06-05T13:57:42.490+03:00",
+      "isLatest": true,
+      "updatedAt": "2026-06-05T13:57:42.490+03:00"
+    }
+  }
+}
