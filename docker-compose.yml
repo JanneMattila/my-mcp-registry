@@ -1,0 +1,40 @@
+services:
+  registry:
+    image: ghcr.io/modelcontextprotocol/registry:latest
+    container_name: mcp-registry
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MCP_REGISTRY_DATABASE_URL: ${MCP_REGISTRY_DATABASE_URL:-postgres://mcpregistry:mcpregistry@postgres:5432/mcp-registry}
+      MCP_REGISTRY_ENVIRONMENT: ${MCP_REGISTRY_ENVIRONMENT:-test}
+      MCP_REGISTRY_SEED_FROM: ${MCP_REGISTRY_SEED_FROM:-https://registry.modelcontextprotocol.io/v0/servers?search=domdomegg}
+      MCP_REGISTRY_ENABLE_ANONYMOUS_AUTH: ${MCP_REGISTRY_ENABLE_ANONYMOUS_AUTH:-true}
+      MCP_REGISTRY_ENABLE_REGISTRY_VALIDATION: ${MCP_REGISTRY_ENABLE_REGISTRY_VALIDATION:-true}
+      MCP_REGISTRY_JWT_PRIVATE_KEY_SEED: ${MCP_REGISTRY_JWT_PRIVATE_KEY_SEED:-0123456789abcdef0123456789abcdef}
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: mcp-registry-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mcp-registry}
+      POSTGRES_USER: ${POSTGRES_USER:-mcpregistry}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mcpregistry}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mcpregistry} -d ${POSTGRES_DB:-mcp-registry}"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
