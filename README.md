@@ -24,7 +24,7 @@ Content:
 Yes.
 
 In [upload.ps1](upload.ps1), static website hosting is configured with:
-- index document: v0.1/servers/index.json
+- index document: index.json
 - 404 document: 404.json
 
 That happens via az storage blob service-properties update with the --404-document value set from ErrorDocument (default is 404.json).

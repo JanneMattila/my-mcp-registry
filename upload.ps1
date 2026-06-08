@@ -9,7 +9,7 @@ param(
 
     [string]$SourceFolder = (Join-Path $PSScriptRoot 'docs'),
 
-    [string]$IndexDocument = 'v0.1/servers/index.json',
+    [string]$IndexDocument = 'index.json',
 
     [string]$ErrorDocument = '404.json'
 )
@@ -51,4 +51,4 @@ if ([string]::IsNullOrWhiteSpace($webEndpoint)) {
 }
 
 Write-Host "Static website endpoint: $webEndpoint"
-Write-Host "Registry index: $($webEndpoint.TrimEnd('/'))/$IndexDocument"
+Write-Host "Registry index: $($webEndpoint.TrimEnd('/'))/v0.1/servers/index.json"
