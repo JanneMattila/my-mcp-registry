@@ -1,7 +1,9 @@
 param(
     [string]$RegistryRoot = 'http://localhost:8080',
     [switch]$Compact,
-    [int]$SampleLimit = 25
+    [int]$SampleLimit = 25,
+    [switch]$SkipHealthCheck,
+    [int]$HealthCheckTimeoutSec = 15
 )
 
 $ErrorActionPreference = 'Stop'
@@ -218,6 +220,217 @@ function Resolve-SampleServerUrls {
     }
 }
 
+function Invoke-WebRequestSafe {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Uri,
+
+        [string]$Method = 'Get',
+
+        [int]$TimeoutSec = 15
+    )
+
+    $params = @{
+        Uri             = $Uri
+        Method          = $Method
+        UseBasicParsing = $true
+        TimeoutSec      = $TimeoutSec
+        ErrorAction     = 'Stop'
+    }
+
+    # PowerShell 7+ can return non-2xx responses instead of throwing.
+    if ((Get-Command Invoke-WebRequest).Parameters.ContainsKey('SkipHttpErrorCheck')) {
+        $params.SkipHttpErrorCheck = $true
+    }
+
+    try {
+        $response = Invoke-WebRequest @params
+        return [PSCustomObject]@{
+            Reachable  = $true
+            StatusCode = [int]$response.StatusCode
+            Content    = $response.Content
+            Error      = $null
+        }
+    }
+    catch {
+        $statusCode = $null
+        $response = $_.Exception.Response
+        if ($null -ne $response -and $null -ne $response.StatusCode) {
+            $statusCode = [int]$response.StatusCode
+        }
+
+        # A status code (even 4xx/5xx) means the endpoint answered: something is there.
+        return [PSCustomObject]@{
+            Reachable  = ($null -ne $statusCode)
+            StatusCode = $statusCode
+            Content    = $null
+            Error      = $_.Exception.Message
+        }
+    }
+}
+
+function Test-McpRemote {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Url,
+
+        [int]$TimeoutSec = 15
+    )
+
+    $result = Invoke-WebRequestSafe -Uri $Url -Method 'Get' -TimeoutSec $TimeoutSec
+
+    if ($result.Reachable) {
+        return [PSCustomObject]@{
+            Ok     = $true
+            Detail = "HTTP $($result.StatusCode)"
+        }
+    }
+
+    return [PSCustomObject]@{
+        Ok     = $false
+        Detail = $result.Error
+    }
+}
+
+function Test-NpmPackage {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Identifier,
+
+        [string]$Version,
+
+        [int]$TimeoutSec = 15
+    )
+
+    # Scoped names (@scope/name) are accepted directly by the npm registry.
+    $url = "https://registry.npmjs.org/$Identifier"
+    $result = Invoke-WebRequestSafe -Uri $url -Method 'Get' -TimeoutSec $TimeoutSec
+
+    if (-not $result.Reachable -or $null -eq $result.StatusCode -or $result.StatusCode -ge 400) {
+        $detail = if ($result.StatusCode) { "HTTP $($result.StatusCode)" } else { $result.Error }
+        return [PSCustomObject]@{
+            Ok     = $false
+            Detail = "package not found ($detail)"
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($Version)) {
+        return [PSCustomObject]@{
+            Ok     = $true
+            Detail = "package exists"
+        }
+    }
+
+    try {
+        $package = $result.Content | ConvertFrom-Json
+        $availableVersions = @($package.versions.PSObject.Properties.Name)
+        if ($availableVersions -contains $Version) {
+            return [PSCustomObject]@{
+                Ok     = $true
+                Detail = "package + version $Version exist"
+            }
+        }
+
+        # The declared version may be a dist-tag (e.g. "latest", "next") rather than a literal version.
+        $distTags = $package.'dist-tags'
+        if ($null -ne $distTags -and ($distTags.PSObject.Properties.Name -contains $Version)) {
+            $resolved = $distTags.$Version
+            return [PSCustomObject]@{
+                Ok     = $true
+                Detail = "package + dist-tag '$Version' -> $resolved exist"
+            }
+        }
+
+        return [PSCustomObject]@{
+            Ok     = $false
+            Detail = "version $Version not published"
+        }
+    }
+    catch {
+        return [PSCustomObject]@{
+            Ok     = $true
+            Detail = "package exists (version list unavailable)"
+        }
+    }
+}
+
+function Invoke-HealthCheck {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ServersIndexUrl,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('api', 'static')]
+        [string]$Mode,
+
+        [int]$TimeoutSec = 15
+    )
+
+    Write-Host ""
+    Write-Host "=== Health check ===" -ForegroundColor Cyan
+
+    $payload = (Invoke-WebRequest -Uri $ServersIndexUrl -UseBasicParsing).Content | ConvertFrom-Json
+    if ($null -eq $payload.servers -or $payload.servers.Count -eq 0) {
+        Write-Host "No servers to health check." -ForegroundColor Yellow
+        return $true
+    }
+
+    $allHealthy = $true
+
+    foreach ($entry in $payload.servers) {
+        $server = $entry.server
+        $key = Get-ServerKey -ServerEntry $entry -Mode $Mode
+
+        Write-Host ""
+        Write-Host "Server: $key (v$($server.version))" -ForegroundColor White
+
+        $remotes = @($server.remotes | Where-Object { $_ -and $_.url })
+        $packages = @($server.packages | Where-Object { $_ })
+
+        if ($remotes.Count -eq 0 -and $packages.Count -eq 0) {
+            Write-Host "  WARN  no remotes or packages declared" -ForegroundColor Yellow
+            continue
+        }
+
+        foreach ($remote in $remotes) {
+            $result = Test-McpRemote -Url $remote.url -TimeoutSec $TimeoutSec
+            if ($result.Ok) {
+                Write-Host "  PASS  remote $($remote.url) -> $($result.Detail)" -ForegroundColor Green
+            }
+            else {
+                Write-Host "  FAIL  remote $($remote.url) -> $($result.Detail)" -ForegroundColor Red
+                $allHealthy = $false
+            }
+        }
+
+        foreach ($pkg in $packages) {
+            if ($pkg.registryType -eq 'npm') {
+                $result = Test-NpmPackage -Identifier $pkg.identifier -Version $pkg.version -TimeoutSec $TimeoutSec
+                if ($result.Ok) {
+                    Write-Host "  PASS  npm $($pkg.identifier)@$($pkg.version) -> $($result.Detail)" -ForegroundColor Green
+                }
+                else {
+                    Write-Host "  FAIL  npm $($pkg.identifier)@$($pkg.version) -> $($result.Detail)" -ForegroundColor Red
+                    $allHealthy = $false
+                }
+            }
+            else {
+                Write-Host "  SKIP  $($pkg.registryType) package $($pkg.identifier) (no checker)" -ForegroundColor Yellow
+            }
+        }
+    }
+
+    Write-Host ""
+    if ($allHealthy) {
+        Write-Host "All health checks passed." -ForegroundColor Green
+    }
+    else {
+        Write-Host "One or more health checks failed." -ForegroundColor Red
+    }
+
+    return $allHealthy
+}
+
 if (-not (Test-Jq)) {
     throw "jq is not installed or not on PATH. Install jq and rerun this script."
 }
@@ -258,6 +471,13 @@ Invoke-JqExample -Title 'List server title + description' -Url $layout.ServersIn
 Invoke-JqExample -Title 'List transport endpoints by server' -Url $layout.ServersIndexUrl -Filter '.servers[].server | {idOrName: (.name // .id), remotes: [.remotes[]?.url // empty], stdioPackages: [.packages[]?.identifier // empty]}'
 Invoke-JqExample -Title 'Show sample server versions index details' -Url $sample.ServerVersionsIndexUrl -Filter '.servers[] | {idOrName: (.server.name // .server.id), version: .server.version, isLatest: ._meta["io.modelcontextprotocol.registry/official"].isLatest}'
 Invoke-JqExample -Title 'Show sample server latest metadata' -Url $sample.ServerLatestUrl -Filter '{idOrName: (.server.name // .server.id), title: .server.title, version: .server.version, remotes: [.server.remotes[]?.url // empty], packages: [.server.packages[]? | {registryType, identifier, version}]}'
+
+if (-not $SkipHealthCheck) {
+    Invoke-HealthCheck `
+        -ServersIndexUrl $layout.ServersIndexUrl `
+        -Mode $layout.Mode `
+        -TimeoutSec $HealthCheckTimeoutSec | Out-Null
+}
 
 Write-Host ""
 Write-Host "Done. Edit run.ps1 to add your own jq filters." -ForegroundColor Green
