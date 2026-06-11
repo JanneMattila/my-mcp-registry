@@ -122,7 +122,7 @@ function Get-ApiRecords {
     $cursor = $null
 
     do {
-        $url = "$BaseUrl?limit=$PageLimit"
+        $url = "${BaseUrl}?limit=$PageLimit"
         if (-not [string]::IsNullOrWhiteSpace($cursor)) {
             $url += "&cursor=$([Uri]::EscapeDataString($cursor))"
         }
