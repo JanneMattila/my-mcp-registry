@@ -6,6 +6,8 @@ This repository contains static JSON documents for an MCP registry layout, plus 
 
 - [docs/](docs/)
   - Static JSON files that make up the registry endpoints.
+- [extract.ps1](extract.ps1)
+  - Extracts a live MCP registry into the static `docs/` layout by crawling its endpoints.
 - [run.ps1](run.ps1)
   - HTTP-based validation and jq navigation demo for registry endpoints.
 - [upload.ps1](upload.ps1)
@@ -30,6 +32,48 @@ In [upload.ps1](upload.ps1), static website hosting is configured with:
 That happens via az storage blob service-properties update with the --404-document value set from ErrorDocument (default is 404.json).
 
 When a request targets a missing path on the static website endpoint, Azure Storage serves this custom 404 file.
+
+## Extracting a registry with extract.ps1
+
+[extract.ps1](extract.ps1) crawls a running MCP registry and mirrors it into the static `docs/` layout used by this repo, producing a self-contained static site you can publish.
+
+### Parameters
+
+- `RegistryRoot` (default `http://localhost:8080`)
+  - Absolute http/https URL of the source registry to extract.
+- `OutputFolder` (default `docs/` next to the script)
+  - Destination folder for the generated static files.
+- `PageLimit` (default `100`)
+  - Page size used when paging through API results.
+
+### Layout detection
+
+The script auto-detects the source registry layout:
+
+- API layout: probes `/v0/servers` and pages through results using cursors (`nextCursor`).
+- Static layout: falls back to `/v0.1/servers/index.json` if the API layout is not found.
+
+If neither layout is discovered, the script throws an error.
+
+### What it writes
+
+For each server it discovers, the script writes:
+
+- The top-level servers index: `v0.1/servers/index.json`
+- A per-server versions index: `v0.1/servers/<id>/versions/index.json`
+- A document per version: `v0.1/servers/<id>/versions/<version>/index.json`
+- A `latest` document: `v0.1/servers/<id>/versions/latest/index.json`
+
+For the API layout, the `latest` document is written from the version flagged with `isLatest`. All JSON is written as UTF-8 without a BOM to match the original bytes.
+
+It also mirrors `404.json` from the source registry (falling back to a default not-found body if the source does not expose one), so the extracted folder is a complete static site.
+
+### Example
+
+```powershell
+# Extract a remote registry into the local docs/ folder
+.\extract.ps1 -RegistryRoot https://registry.modelcontextprotocol.io
+```
 
 ## Registry layout in this repo
 
