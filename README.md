@@ -2,6 +2,17 @@
 
 This repository contains static JSON documents for an MCP registry layout, plus scripts to validate and publish the content.
 
+## Live registry endpoint
+
+The `docs/` folder is published with GitHub Pages and is available here:
+
+- https://jannemattila.github.io/my-mcp-registry
+
+Example endpoints:
+
+- Servers index: https://jannemattila.github.io/my-mcp-registry/v0.1/servers/index.json
+- Not-found payload: https://jannemattila.github.io/my-mcp-registry/404.json
+
 ## What this repo contains
 
 - [docs/](docs/)
@@ -98,3 +109,42 @@ Version or latest documents:
 1. Edit JSON files under [docs/](docs/).
 2. Validate and inspect over HTTP using [run.ps1](run.ps1).
 3. Publish to Azure Storage static website using [upload.ps1](upload.ps1).
+
+## Using this registry with GitHub Enterprise AI controls
+
+GitHub Enterprise administrators govern how Copilot uses Model Context Protocol
+(MCP) servers through the **AI controls** in Copilot policies (the "MCP servers
+in Copilot" policy and the associated allowed/curated server configuration). A
+self-hosted registry like the one published here lets you present a *curated,
+organization-approved* catalog of MCP servers to your developers instead of
+relying solely on the public [GitHub MCP Registry](https://github.com/mcp).
+
+The live URL is a complete, standards-shaped registry surface:
+
+```
+https://jannemattila.github.io/my-mcp-registry
+```
+
+How it fits into enterprise AI controls:
+
+1. **Curate the catalog.** Keep only the MCP servers your organization has
+   reviewed and approved as JSON documents under [docs/](docs/) (each server,
+   its versions, and a `latest` document). The static layout mirrors the MCP
+   registry API shape, so it can be consumed the same way as a hosted registry.
+2. **Host it on a trusted, stable URL.** GitHub Pages (this repo) or Azure
+   Storage static website hosting (via [upload.ps1](upload.ps1)) both serve the
+   exact same JSON, over HTTPS, with permissive CORS — suitable for tools and
+   clients that fetch the registry directly.
+3. **Point your enterprise/organization at it.** In the GitHub Enterprise
+   Copilot policy settings (AI controls), enable the "MCP servers in Copilot"
+   policy and configure the approved registry/servers your members are allowed
+   to use. Developers then discover and install only the servers in your
+   curated registry, giving you a governed, auditable allowlist.
+4. **Update centrally.** Adding, removing, or version-bumping a server is just a
+   JSON edit plus a publish. Every Copilot client that reads the registry picks
+   up the change without per-developer configuration.
+
+> Note: The GitHub MCP Registry and the related Copilot MCP policies are evolving
+> (parts are in public preview), so confirm the exact policy UI and registry
+> configuration fields in your enterprise against the current
+> [GitHub Copilot enterprise policy documentation](https://docs.github.com/en/copilot/how-tos/administer/enterprises/managing-policies-and-features-for-copilot-in-your-enterprise).
