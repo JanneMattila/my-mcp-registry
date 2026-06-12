@@ -97,9 +97,62 @@
           "updatedAt": "2026-06-05T13:57:42.490+03:00"
         }
       }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "myserver",
+        "title": "myserver",
+        "description": "myserver",
+        "version": "latest",
+        "packages": [
+          {
+            "registryType": "node",
+            "version": " ",
+            "runtimeHint": "node",
+            "transport": {
+              "type": "stdio"
+            },
+            "identifier": "./src/mcp-server/server.js",
+            "runtimeArguments": [
+              {
+                "type": "positional",
+                "isRepeated": false,
+                "variables": {},
+                "isRequired": true,
+                "format": "string",
+                "value": "./src/mcp-server/server.js",
+                "isSecret": false
+              }
+            ],
+            "packageArguments": [],
+            "environmentVariables": [
+              {
+                "name": "FORCE_INTERACTIVE_AUTH",
+                "isRequired": false,
+                "format": "string",
+                "default": "false",
+                "choices": [
+                  "true",
+                  "false"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "createdAt": "2026-06-12T13:44:30.9859284+03:00",
+          "updatedAt": "2026-06-12T14:09:14.0963371+03:00",
+          "isLatest": true
+        },
+        "x-ms-id": "14244cf6-3eb2-40ec-a548-8378168db1df"
+      }
     }
   ],
   "metadata": {
-    "count": 3
+    "count": 4
   }
 }
